@@ -85,16 +85,30 @@ def convert_to_float(corrected, exclude_columns=[]):
 
 st.write ('What data are you processing??')
 
-tibetAWS = st.checkbox('tibet AWS')
-langtangAWS = st.checkbox('langtang AWS')
+# tibetAWS = st.checkbox('tibet AWS')
+# langtangAWS = st.checkbox('langtang AWS')
 
-if tibetAWS:
+dataset_option = st.selectbox(
+    'Choose a dataset to process:',
+    ['-- Select --', 'Tibet AWS', 'Langtang AWS']
+)
+
+
+
+
+# if tibetAWS:
+if dataset_option == 'Tibet AWS':
      st.write("we will do some processing now!")
      uploaded_file = st.file_uploader("upload a new file for processing")
 
      if uploaded_file is not None:
         
         new_data = pd.read_csv(uploaded_file, skiprows = 1).iloc[2:]
+
+
+        st.write('Processing...')
+        st.image('/Users/varyabazilova/Desktop/streamit_things/field_data_processing/Tinkerbell magic wand gif.gif')
+
         # st.write('these are old column names:', new_data.columns)
 
         # renamed = new_data.rename(columns=column_mapping)
@@ -124,32 +138,31 @@ if tibetAWS:
             df_numeric = df[selected_cols].apply(lambda x: pd.to_numeric(x, errors='coerce'))
 
             # --- Plot
-            fig, axs = plt.subplots(len(selected_cols), 1, figsize=(10, 3 * len(selected_cols)), sharex=True)
+            # Use a placeholder container to avoid repeated plotting
+            plot_container = st.container()
+            with plot_container:
+                fig, axs = plt.subplots(len(selected_cols), 1, figsize=(10, 3 * len(selected_cols)), sharex=True)
+                
+                if len(selected_cols) ==1:
+                    axs=[axs]
 
-        if len(selected_cols) ==1:
-            axs=[axs]
+                for ax, col in zip(axs, selected_cols):
+                    ax.plot(df.index, df_numeric[col])
+                    ax.set_title(col)
+                    ax.grid(True)
 
-        for ax, col in zip(axs, selected_cols):
-            ax.plot(df.index, df_numeric[col])
-            ax.set_title(col)
-            ax.grid(True)
-
-            plt.tight_layout()
-            st.pyplot(fig)
+                plt.tight_layout()
+                st.pyplot(fig)
         
         else:
             st.info("Please select at least one column to plot.")
-
-        
-
-        # plot the file 
+            
 
 
-
-
-
-if langtangAWS: 
+# if langtangAWS: 
+if dataset_option == 'Langtang AWS':
      st.write("Ooooops its still under constraction...")
+     st.image('/Users/varyabazilova/Desktop/streamit_things/field_data_processing/Under Construction Penguin GIF by Pudgy Penguins.gif')
 
 # it tibet: 
 # upload csv filw with the data
