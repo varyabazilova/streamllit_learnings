@@ -4,6 +4,7 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 
+import io
 from PIL import Image
 
 
@@ -119,14 +120,6 @@ def plot_selected_columns(df, label_prefix="column", key_prefix=""):
 
 
 
-# Split screen into two columns
-
-# it tibet: 
-# upload csv filw with the data
-# check if the column names match 
-# if column names match - change them
-# 
-
 st.set_page_config(layout="wide")
 st.header('TIBET AWS DATA PROCESSING')
 st.header('   ')
@@ -139,7 +132,9 @@ col1, col2 = st.columns(2)
 # --- LEFT: Load and plot File X ---
 with col1:
     st.header("Previous file from Tibet AWS")
-    old_file = st.file_uploader("upload previous .csv file from Tibet AWS", key="old_file")
+    
+    st.markdown('''Upload :blue-background[previous .csv file] from Tibet AWS''')#, unsafe_allow_html=True)
+    old_file = st.file_uploader(" ", key="old_file")
 
     if old_file:
         # df_old = pd.read_csv(old_file)
@@ -159,15 +154,17 @@ with col1:
             'Do you want to plot the data?',
             ('Nei', 'Yes, plot previous data')
         )
-        if option == 'Yes':
+        if option == 'Yes, plot previous data':
             # plot the selected columns
             st.subheader("Exmine plot for the previous data:")
             plot_selected_columns(df_old, label_prefix="previous", key_prefix="previous")
     
 
 with col2:
-    st.header("new file to process and append:")
-    uploaded_file = st.file_uploader("Upload a raw ''CR1000_Measured_values.dat'' file for processing")
+    st.header("Raw file to process and append:")
+    st.markdown('''Upload :blue-background[raw ''CR1000_Measured_values.dat''] from Tibet AWS''')
+
+    uploaded_file = st.file_uploader(" ", key = 'new file')
 
     if uploaded_file is not None:
         new_data = pd.read_csv(uploaded_file, skiprows = 1).iloc[2:]
@@ -177,6 +174,8 @@ with col2:
         new_data_renamed_corr = apply_corrections(new_data_renamed)
         
         new_data_renamed_corr = convert_to_float(new_data_renamed_corr, exclude_columns=['DATE', 'TIME'])
+        new_data_renamed_corr = new_data_renamed_corr[df_old.columns.tolist()]
+
         st.subheader('Preview of corrected file:')
         st.write(new_data_renamed_corr.head())
         
@@ -186,29 +185,82 @@ with col2:
             'Do you want to plot the data?',
             ('Nei', 'Yes, plot new data')
         )
-        if option == 'Yes':
+        if option == 'Yes, plot new data':
             # plot the selected columns
             st.subheader("Exmine plot for the previous data:")
-            plot_selected_columns(df_old, label_prefix="new", key_prefix="new")
-        
+            plot_selected_columns(new_data_renamed_corr, label_prefix="new", key_prefix="new")
 
-        
-# Show full-width combined panel only if both files are present
 if old_file and uploaded_file:
     with st.container():
-        st.header("Combined Output Panel")
+        st.header("Combining DataFrames")
 
-        # # Optional: make sure df_old gets same treatment as new data
-        # df_old_renamed = rename_columns(df_old, column_mapping)
-        # df_old_corrected = apply_corrections(df_old_renamed)
-        # df_old_corrected = convert_to_float(df_old_corrected, exclude_columns=['DATE', 'TIME'])
+        # --- Check if column names match
+        old_cols = set(df_old.columns)
+        new_cols = set(new_data_renamed_corr.columns)
 
-        df_combined = pd.concat([df_old, new_data_renamed_corr], ignore_index=True)
+        if old_cols == new_cols:
+            st.success("✅ Column names match: YES")
+            # Combine dataframes
+            df_combined = pd.concat([df_old, new_data_renamed_corr], ignore_index=True)
+            # make sure to convert to numeric
+            cols_to_convert = [col for col in df_combined.columns if col not in ['DATE', 'TIME']]
+            for col in cols_to_convert:
+                df_combined[col] = pd.to_numeric(df_combined[col], errors='coerce')
+            # then make sure the rounding is consistent
+            df_combined = df_combined.round(2)
+            st.markdown('''Check if the data types are ok''')
+            st.write(df_combined.dtypes)
+            
+            st.subheader("Appended DataFrame")
+            tosee = st.selectbox(
+            'Which part of the new DF do you want to look at?',
+            ('beginning', 'all', 'end')
+            )
+            if tosee =='beginning':
+                st.dataframe(df_combined.head())
+            if tosee =='all':
+                st.dataframe(df_combined)
+            if tosee=='end':
+                st.dataframe(df_combined.tail())
+                
+            # SAVE THE FILE
 
-        st.subheader("Appended DataFrame")
-        st.dataframe(df_combined)
+            # Ensure DATE is datetime format, just in case
+            df_combined['DATE'] = pd.to_datetime(df_combined['DATE'])
+            # Get the last date in the DATE column
+            last_date = df_combined['DATE'].dropna().max()
+            # Format as YYYYMMDD
+            date_str = last_date.strftime('%Y%m')
+            # Create filename
+            filename = f"{date_str}_AWS_Paiku.csv"
+        
+            # Save DataFrame to in-memory buffer
+            csv_buffer = io.StringIO()
+            df_combined.to_csv(csv_buffer, index=False)
+            csv_data = csv_buffer.getvalue()
+            
+            st.markdown(f'''The new filename for the appended dataframe is :blue-background[{filename}]''')
 
-        st.subheader("Plot of Combined Data")
-        st.line_chart(df_combined)
+
+            # Create download button
+            st.download_button(
+                label="📥 Download Combined CSV",
+                data=csv_data,
+                file_name=filename,
+                mime='text/csv'
+                )
+
+
+        else:
+            st.error("❌ Column names match: NO")
+            # Optionally, print the differences
+            missing_in_old = new_cols - old_cols
+            missing_in_new = old_cols - new_cols
+
+            if missing_in_old:
+                st.warning(f"Columns in new file but not in old: {missing_in_old}")
+            if missing_in_new:
+                st.warning(f"Columns in old file but not in new: {missing_in_new}")
+
 else:
     st.info("Please upload previous data and new data to view combined output.")
